@@ -14,6 +14,7 @@ internal sealed class AuthorizationPolicyCache : IDisposable
 
     public AuthorizationPolicyCache(EndpointDataSource dataSource)
     {
+        // dataSource支持changeToken, 一旦change就flush cache
         // We cache AuthorizationPolicy instances per-Endpoint for performance, but we want to wipe out
         // that cache if the endpoints change so that we don't allow unbounded memory growth.
         _policyCache = new DataSourceDependentCache<ConcurrentDictionary<Endpoint, AuthorizationPolicy>>(dataSource, (_) =>

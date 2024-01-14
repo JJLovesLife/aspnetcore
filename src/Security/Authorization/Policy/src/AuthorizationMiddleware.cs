@@ -92,6 +92,9 @@ public class AuthorizationMiddleware
     /// <param name="context">The <see cref="HttpContext"/>.</param>
     public async Task Invoke(HttpContext context)
     {
+        /*
+        依赖于endpoint机制
+        */
         ArgumentNullException.ThrowIfNull(context);
 
         var endpoint = context.GetEndpoint();
@@ -113,10 +116,15 @@ public class AuthorizationMiddleware
         if (policy == null)
         {
             // IMPORTANT: Changes to authorization logic should be mirrored in MVC's AuthorizeFilter
+            // AuthorizeAttribute
             var authorizeData = endpoint?.Metadata.GetOrderedMetadata<IAuthorizeData>() ?? Array.Empty<IAuthorizeData>();
 
             var policies = endpoint?.Metadata.GetOrderedMetadata<AuthorizationPolicy>() ?? Array.Empty<AuthorizationPolicy>();
 
+            // AuthorizationPolicyBuilder.Combine(provider.GetPolicy(data.Policy))
+            //  .RequireRole(data.Roles.Split(','))
+            //  .AuthenticationSchemes.Add(data.AuthenticationSchemes.Split(','))
+            // two fallback 1. policyProvider.GetFallbackPolicyAsync() 2. policyProvider.GetDefaultPolicyAsync() based on different cases
             policy = await AuthorizationPolicy.CombineAsync(_policyProvider, authorizeData, policies);
 
             var requirementData = endpoint?.Metadata?.GetOrderedMetadata<IAuthorizationRequirementData>() ?? Array.Empty<IAuthorizationRequirementData>();
@@ -144,6 +152,7 @@ public class AuthorizationMiddleware
             }
         }
 
+        // A policy is just a list of schemes + a list of requirement
         if (policy == null)
         {
             await _next(context);
@@ -153,6 +162,8 @@ public class AuthorizationMiddleware
         // Policy evaluator has transient lifetime so it's fetched from request services instead of injecting in constructor
         var policyEvaluator = context.RequestServices.GetRequiredService<IPolicyEvaluator>();
 
+        // 如果没有scheme，用HttpContext已有的。否则context.AuthenticateAsync(scheme)然后merge所有的scheme
+        // Q: 如果之前的Authentication已经验证过了，但是这个有指定了相同scheme，这里会重复验证吗？
         var authenticateResult = await policyEvaluator.AuthenticateAsync(policy, context);
         if (authenticateResult?.Succeeded ?? false)
         {
@@ -190,8 +201,10 @@ public class AuthorizationMiddleware
             resource = context;
         }
 
+        // IAuthorizationService.AuthorizeAsync, 基本上就是调用所有IAuthorizationHandler.HandleAsync
         var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult!, context, resource);
         var authorizationMiddlewareResultHandler = context.RequestServices.GetRequiredService<IAuthorizationMiddlewareResultHandler>();
+        // default: 成功next，Challenged则ChallengeAsync(AuthN失败)，forbidden则ForbidAsync(AuthN成功，但是AuthZ失败)
         await authorizationMiddlewareResultHandler.HandleAsync(_next, context, policy, authorizeResult);
     }
 

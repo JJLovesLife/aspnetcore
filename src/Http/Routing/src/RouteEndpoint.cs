@@ -9,6 +9,7 @@ namespace Microsoft.AspNetCore.Routing;
 /// <summary>
 /// Represents an <see cref="Endpoint"/> that can be used in URL matching or URL generation.
 /// </summary>
+/// Metadata: include CustomAttribute
 public sealed class RouteEndpoint : Endpoint
 {
     /// <summary>

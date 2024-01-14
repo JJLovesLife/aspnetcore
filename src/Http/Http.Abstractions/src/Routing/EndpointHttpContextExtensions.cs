@@ -15,6 +15,7 @@ public static class EndpointHttpContextExtensions
     /// </summary>
     /// <param name="context">The <see cref="HttpContext"/> context.</param>
     /// <returns>The <see cref="Endpoint"/>.</returns>
+    /// UseRouting: 在EndpointRoutingMiddleware.Invoke里set
     public static Endpoint? GetEndpoint(this HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
