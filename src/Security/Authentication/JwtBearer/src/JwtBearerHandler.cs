@@ -51,6 +51,16 @@ public class JwtBearerHandler : AuthenticationHandler<JwtBearerOptions>
 
     /// <summary>
     /// Searches the 'Authorization' header for a 'Bearer' token. If the 'Bearer' token is found, it is validated using <see cref="TokenValidationParameters"/> set in the options.
+    ///
+    /// 1. 从request中拿到token，默认是 Authorization header Bearer token，可以用event重载
+    /// 2. 用TokenHandlers或者SecurityTokenValidators从token中获得principal + validated token
+    ///    validate的parameter从 Options.TokenValidationParameters 中得到，不过经过了configurationManager的处理
+    ///    Note: 这个TokenHandler的源码基本都在 [Microsoft.IdentityModel相关的NuGet package里](https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet)
+    /// 3. validate的结果经过Event重载的hook之后返回
+    ///
+    /// Q: 这个然后的 result 在user的code里面有哪些方式取到？
+    /// A: principal 会在 HttpContext.User, result本身set到context.Feature上面。
+    ///
     /// </summary>
     /// <returns></returns>
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -98,12 +108,31 @@ public class JwtBearerHandler : AuthenticationHandler<JwtBearerOptions>
             SecurityToken? validatedToken = null;
             ClaimsPrincipal? principal = null;
 
+            // 两者不同的validator机制中选一种，得到的会是 claims + token
             if (!Options.UseSecurityTokenValidators)
             {
                 foreach (var tokenHandler in Options.TokenHandlers)
                 {
                     try
                     {
+                        /*
+                        默认的JsonWebTokenHandler逻辑：
+                        1. ReadToken (hook point) : read header & payload JSON
+                        2. ValidateToken，关键逻辑在 JsonWebTokenHandler.ValidateTokenAsync
+                           - [hook] TransformBeforeSignatureValidation
+                           - ValidateSignature
+                             opt#RequireSignedTokens
+                             GetKey
+                           - ValidateSigningKey
+                             default to no-validate?
+                           - ValidateTokenPayload
+                             nbf, exp
+                             aud
+                             iss
+                             token replay (default not)
+                             actort (default not)
+                             Header's typ (in allow list, same as aud, iss)
+                        */
                         var tokenValidationResult = await tokenHandler.ValidateTokenAsync(token, tvp);
                         if (tokenValidationResult.IsValid)
                         {
@@ -134,7 +163,7 @@ public class JwtBearerHandler : AuthenticationHandler<JwtBearerOptions>
                         try
                         {
                             principal = validator.ValidateToken(token, tvp, out validatedToken);
-                        }
+                        }   // 没有break
                         catch (Exception ex)
                         {
                             validationFailures ??= new List<Exception>(1);

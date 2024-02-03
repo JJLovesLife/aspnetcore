@@ -35,6 +35,18 @@ public class AuthenticationMiddleware
 
     /// <summary>
     /// Invokes the middleware performing authentication.
+    ///
+    /// 1. handle auth request, 比如AAD的redirect url那种
+    ///    IAuthenticationHandlerProvider.GetHandlerAsync(context, scheme)
+    ///      .HandleRequestAsync
+    /// 2. 用默认scheme AuthN用户
+    ///    [*] HttpContext.AuthenticateAsync(scheme)
+    ///    ~> [*] IAuthenticationService.AuthenticateAsync
+    ///    => IAuthenticationHandlerProvider.GetHandlerAsync(context, scheme)
+    ///       => 默认实现从service中拿handlerType，或者Activator一个instance
+    ///       [*] handler.AuthenticateAsync
+    ///       if success, do principal transform (no-op default)
+    ///
     /// </summary>
     /// <param name="context">The <see cref="HttpContext"/>.</param>
     public async Task Invoke(HttpContext context)
